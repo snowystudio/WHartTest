@@ -27,6 +27,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from asgiref.sync import sync_to_async
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages.utils import count_tokens_approximately
 from langchain.agents import create_agent
 from wharttest_django.checkpointer import get_async_checkpointer
 
@@ -471,15 +472,11 @@ class AgentLoopStreamAPIView(View):
                     logger.info("AgentLoopStreamAPI: Interrupt detected, returning early")
                 else:
                     # 正常完成
-                    # 计算 Token 使用量
+                    # 计算 Token 使用量（使用 LangChain 的 count_tokens_approximately 保持一致性）
                     try:
                         current_state = await agent.aget_state(invoke_config)
                         all_messages = current_state.values.get("messages", []) if current_state.values else []
-                        total_tokens = 0
-                        for msg in all_messages:
-                            if hasattr(msg, 'content') and msg.content:
-                                content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                                total_tokens += context_checker.count_tokens(content, model_name)
+                        total_tokens = count_tokens_approximately(all_messages)
 
                         yield create_sse_data({
                             'type': 'context_update',
@@ -1050,15 +1047,11 @@ class AgentLoopResumeAPIView(View):
                 if interrupt_detected:
                     logger.info("AgentLoopResumeAPI: New interrupt detected after resume")
                 else:
-                    # 正常完成 - 计算 Token 使用量
+                    # 正常完成 - 计算 Token 使用量（使用 LangChain 的 count_tokens_approximately 保持一致性）
                     try:
                         current_state = await agent.aget_state(config)
                         all_messages = current_state.values.get("messages", []) if current_state.values else []
-                        total_tokens = 0
-                        for msg in all_messages:
-                            if hasattr(msg, 'content') and msg.content:
-                                content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                                total_tokens += context_checker.count_tokens(content, model_name)
+                        total_tokens = count_tokens_approximately(all_messages)
 
                         yield create_sse_data({
                             'type': 'context_update',

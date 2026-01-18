@@ -11,7 +11,7 @@ LangChain v1 中间件配置模块
 """
 
 import logging
-from typing import Callable, List, Optional, Dict, Any
+from typing import Callable, List, Optional, Dict, Any, Iterable
 
 from langchain.agents.middleware import (
     ModelRetryMiddleware,
@@ -25,15 +25,32 @@ from requirements.context_limits import context_checker, get_context_limit_from_
 logger = logging.getLogger(__name__)
 
 
-def _create_token_counter(model_name: str) -> Callable[[str], int]:
-    """创建基于 tiktoken 的精确 Token 计数器"""
-    def token_counter(text) -> int:
-        # 确保输入是字符串
-        if text is None:
-            return 0
-        if not isinstance(text, str):
-            text = str(text)
-        return context_checker.count_tokens(text, model_name)
+def _create_token_counter(model_name: str) -> Callable[[Iterable], int]:
+    """
+    创建基于 tiktoken 的精确 Token 计数器
+
+    注意：SummarizationMiddleware 需要的 token_counter 签名是:
+    Callable[[Iterable[MessageLikeRepresentation]], int]
+    即接收消息列表，返回总 token 数
+    """
+    from langchain_core.messages.utils import count_tokens_approximately
+
+    def token_counter(messages: Iterable) -> int:
+        """计算消息列表的 token 总数"""
+        try:
+            # 使用 LangChain 官方的 count_tokens_approximately
+            # 它会正确处理 content、tool_calls、role 等所有字段
+            return count_tokens_approximately(messages)
+        except Exception as e:
+            logger.warning(f"Token 计数失败，使用粗略估算: {e}")
+            # 回退方案
+            total = 0
+            for msg in messages:
+                if hasattr(msg, 'content') and msg.content:
+                    content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                    total += context_checker.count_tokens(content, model_name)
+            return total
+
     return token_counter
 
 
@@ -429,7 +446,13 @@ def get_standard_middleware(
         )
         if summarization_mw is not None:
             middleware.append(summarization_mw)
-            logger.debug("已添加 SummarizationMiddleware (精确 Token 计数: %s)", model_name)
+            logger.info("✅ 已添加 SummarizationMiddleware (trigger_tokens=%d, keep_messages=%d, model=%s)",
+                        summarization_trigger_tokens, summarization_keep_messages, model_name)
+        else:
+            logger.warning("⚠️ SummarizationMiddleware 创建失败，返回 None")
+    else:
+        logger.info("⏭️ 跳过 SummarizationMiddleware: enable_summarization=%s, summarization_model=%s",
+                    enable_summarization, summarization_model is not None)
 
     if enable_hitl:
         middleware.append(get_human_in_the_loop_middleware(
@@ -792,7 +815,13 @@ async def get_standard_middleware_async(
         )
         if summarization_mw is not None:
             middleware.append(summarization_mw)
-            logger.debug("已添加 SummarizationMiddleware (精确 Token 计数: %s)", model_name)
+            logger.info("✅ 已添加 SummarizationMiddleware (trigger_tokens=%d, keep_messages=%d, model=%s)",
+                        summarization_trigger_tokens, summarization_keep_messages, model_name)
+        else:
+            logger.warning("⚠️ SummarizationMiddleware 创建失败，返回 None")
+    else:
+        logger.info("⏭️ 跳过 SummarizationMiddleware: enable_summarization=%s, summarization_model=%s",
+                    enable_summarization, summarization_model is not None)
 
     if enable_hitl:
         hitl_mw = await get_human_in_the_loop_middleware_async(

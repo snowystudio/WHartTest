@@ -62,6 +62,7 @@ def check_project_permission(user, project_id):
 # --- New Imports ---
 from typing import TypedDict, Annotated, List, Optional
 from langchain_core.messages import AnyMessage, HumanMessage, AIMessage, ToolMessage, SystemMessage
+from langchain_core.messages.utils import count_tokens_approximately
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages # Correct import for add_messages
@@ -1320,19 +1321,24 @@ class ChatHistoryAPIView(APIView):
                     logger.info(f"ChatHistoryAPIView: No checkpoints found for thread_id: {thread_id}")
             # By processing only the latest checkpoint, we get the final state of messages, avoiding duplicates.
 
-            # 计算上下文Token使用信息
+            # 计算上下文Token使用信息（使用 LangChain 的 count_tokens_approximately 保持一致性）
             context_token_count = 0
             context_limit = 128000
             try:
-                from requirements.context_limits import context_checker
                 active_config = LLMConfig.objects.get(is_active=True)
                 context_limit = active_config.context_limit or 128000
-                
-                for msg_data in history_messages:
-                    content = msg_data.get('content', '')
-                    if content:
-                        content_str = content if isinstance(content, str) else str(content)
-                        context_token_count += context_checker.count_tokens(content_str, active_config.name or "gpt-4o")
+
+                # 尝试使用原始 messages 列表（如果可用）
+                if 'messages' in locals() and messages:
+                    context_token_count = count_tokens_approximately(messages)
+                else:
+                    # 回退：从 history_messages 计算（不够精确，但作为备用）
+                    from requirements.context_limits import context_checker
+                    for msg_data in history_messages:
+                        content = msg_data.get('content', '')
+                        if content:
+                            content_str = content if isinstance(content, str) else str(content)
+                            context_token_count += context_checker.count_tokens(content_str, active_config.name or "gpt-4o")
             except Exception as e:
                 logger.warning(f"ChatHistoryAPIView: Failed to calculate token count: {e}")
 
