@@ -70,7 +70,17 @@ const handleError = (error: any, defaultMessage: string): APIResponse<any> => {
   console.error(defaultMessage, error);
   if (axios.isAxiosError(error)) {
     const responseData = error.response?.data;
-    const message = responseData?.detail || responseData?.message || (typeof responseData === 'string' ? responseData : defaultMessage);
+    // 优先使用 errors 数组中的详细错误信息
+    let message = defaultMessage;
+    if (responseData?.errors && Array.isArray(responseData.errors) && responseData.errors.length > 0) {
+      message = responseData.errors.join('; ');
+    } else if (responseData?.detail) {
+      message = responseData.detail;
+    } else if (responseData?.message) {
+      message = responseData.message;
+    } else if (typeof responseData === 'string') {
+      message = responseData;
+    }
     return {
       success: false,
       error: message,
@@ -326,9 +336,14 @@ export const deleteTestCaseModule = async (
         statusCode: response.data.code,
       };
     } else {
+      // 优先使用 errors 数组中的详细错误信息
+      let errorMessage = response.data.message || '删除模块失败';
+      if (response.data.errors && Array.isArray(response.data.errors) && response.data.errors.length > 0) {
+        errorMessage = response.data.errors.join('; ');
+      }
       return {
         success: false,
-        error: response.data.message || '删除模块失败',
+        error: errorMessage,
         statusCode: response.data.code,
       };
     }
