@@ -62,7 +62,11 @@ export default defineConfig({
               { text: '后端开发 (Django)', link: '/quick-start/back-deployment' },
               { text: 'MCP 工具部署 (MCP)', link: '/quick-start/mcp-deployment' },
             ]},
-            { text: '操作手册', link: '/quick-start/operation-manual' },
+            { text: '操作手册',
+              items:[
+              { text: 'v2.0.0', link: '/quick-start/operation-manual-v2' },
+              { text: 'v1.4.0', link: '/quick-start/operation-manual' },
+            ]},
             { text: '常见问题', link: '/quick-start/problem-deployment' }
           ]
         }
