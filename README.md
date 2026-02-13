@@ -87,6 +87,7 @@ docker-compose up -d
 <img width="400" alt="image" src="https://github.com/user-attachments/assets/b72b71ee-ff6e-4595-9bb1-c02e61951429" />
 
 qq群：
+
 1. 8xxxxxxxx0（已满）
 2. 1017708746
 ---
